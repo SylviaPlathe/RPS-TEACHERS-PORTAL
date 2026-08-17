@@ -17,6 +17,8 @@ if (!fs.existsSync(dataDir)) {
 
 // Get the shared database
 app.get('/*splat', (req, res) => {
+  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+});
   try {
     if (!fs.existsSync(dataFile)) {
       return res.json(null);
