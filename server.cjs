@@ -16,9 +16,7 @@ if (!fs.existsSync(dataDir)) {
 }
 
 // Get the shared database
-app.get('/*splat', (req, res) => {
-  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
-});
+app.get("/api/db", (req, res) => {
   try {
     if (!fs.existsSync(dataFile)) {
       return res.json(null);
@@ -53,7 +51,8 @@ const distPath = path.join(__dirname, "dist");
 
 app.use(express.static(distPath));
 
-app.get("*", (req, res) => {
+// Handle Vite/React routes
+app.get("/*splat", (req, res) => {
   res.sendFile(path.join(distPath, "index.html"));
 });
 
