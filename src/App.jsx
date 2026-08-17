@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
+import { supabase } from "./supabaseClient";
 import {
   Home, Calendar, RefreshCw, ClipboardList, Megaphone, MessageSquare, User,
   LogOut, Users, Bell, Plus, Check, X, ChevronLeft, ChevronRight, Download,
