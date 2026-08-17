@@ -16,7 +16,7 @@ if (!fs.existsSync(dataDir)) {
 }
 
 // Get the shared database
-app.get("/api/db", (req, res) => {
+app.get('/*splat', (req, res) => {
   try {
     if (!fs.existsSync(dataFile)) {
       return res.json(null);
