@@ -224,37 +224,22 @@ export default function App() {
     timetables: INITIAL_TIMETABLES,
   });
   const [dbLoaded, setDbLoaded] = useState(false);
-
-  // Load any previously saved portal data (e.g. teachers an admin added) when the app opens.
-  // NOTE: this is a placeholder using localStorage for the "mock data" phase of the project —
-  // swap this block for real Supabase reads once you connect the backend (see PROJECT_GUIDE.md).
-  // Data saved under an older SEED_VERSION is discarded rather than merged, so code updates
-  // to the demo data (like a renamed teacher list) always take effect.
-  useEffect(() => {
-    try {
-      const saved = window.localStorage.getItem("portal-db");
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed && parsed.seedVersion === SEED_VERSION) {
-          setDb(normalizeDb(parsed.data));
-        }
+// Load the shared database from the server
+useEffect(() => {
+  fetch("/api/db")
+    .then((res) => res.json())
+    .then((data) => {
+      if (data) {
+        setDb(data);
       }
-    } catch (e) {
-      // nothing saved yet, or storage unavailable — start with the demo defaults
-    } finally {
       setDbLoaded(true);
-    }
-  }, []);
-
-  // Save whenever the data changes, so new teachers/substitutions/etc. survive a reload
-  useEffect(() => {
-    if (!dbLoaded) return;
-    try {
-      window.localStorage.setItem("portal-db", JSON.stringify({ seedVersion: SEED_VERSION, data: db }));
-    } catch (e) {
-      // storage unavailable (e.g. private browsing) — data just won't persist
-    }
-  }, [db, dbLoaded]);
+    })
+    .catch((error) => {
+      console.error("Could not load database:", error);
+      setDbLoaded(true);
+    });
+}, []);
+  
 
   const [session, setSession] = useState(null); // { role: 'admin'|'teacher', id }
   const [tab, setTab] = useState("dashboard");
