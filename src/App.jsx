@@ -4,7 +4,7 @@ import {
   LogOut, Users, Bell, Plus, Check, X, ChevronLeft, ChevronRight, Download,
   Sun, Sunset, Moon, AlertCircle, Send, Menu, MoreVertical, Edit3, KeyRound, Trash2
 } from "lucide-react";
-
+import { supabase } from "./supabase";
 /* ============================= DEMO DATA ============================= */
 
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
