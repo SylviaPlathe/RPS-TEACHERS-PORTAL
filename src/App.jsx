@@ -227,37 +227,77 @@ export default function App() {
   // Load shared portal data from the server when the app opens.
   // The server stores this data in data/portal-db.json, so all devices use
   // the same database instead of having separate browser localStorage copies.
+ 
   useEffect(() => {
-    let cancelled = false;
+  let cancelled = false;
 
-    async function loadDb() {
-      try {
-        const response = await fetch("/api/db", {
-          method: "GET",
-          headers: { "Accept": "application/json" },
+  async function loadDb() {
+    try {
+      const [
+        teachers,
+        admins,
+        timetables,
+        substitutions,
+        examDuties,
+        notices,
+        queries,
+        queryReplies,
+      ] = await Promise.all([
+        supabase.from("teachers").select("*"),
+        supabase.from("admins").select("*"),
+        supabase.from("timetables").select("*"),
+        supabase.from("substitutions").select("*"),
+        supabase.from("exam_duties").select("*"),
+        supabase.from("notices").select("*"),
+        supabase.from("queries").select("*"),
+        supabase.from("query_replies").select("*"),
+      ]);
+
+      const results = [
+        teachers,
+        admins,
+        timetables,
+        substitutions,
+        examDuties,
+        notices,
+        queries,
+        queryReplies,
+      ];
+
+      const firstError = results.find(result => result.error);
+
+      if (firstError) {
+        throw firstError.error;
+      }
+
+      if (!cancelled) {
+        setDb({
+          teachers: teachers.data || [],
+          admins: admins.data || [],
+          timetables: timetables.data || [],
+          substitutions: substitutions.data || [],
+          examDuties: examDuties.data || [],
+          notices: notices.data || [],
+          queries: queries.data || [],
         });
 
-        if (!response.ok) throw new Error(`Server returned ${response.status}`);
+        setDbLoaded(true);
+      }
+    } catch (e) {
+      console.error("Could not load data from Supabase:", e);
 
-        const saved = await response.json();
-
-        if (!cancelled && saved && saved.seedVersion === SEED_VERSION && saved.data) {
-          setDb(normalizeDb(saved.data));
-        }
-      } catch (e) {
-        // If the server is unavailable, keep the built-in demo defaults.
-        console.error("Could not load shared portal data:", e);
-      } finally {
-        if (!cancelled) setDbLoaded(true);
+      if (!cancelled) {
+        setDbLoaded(true);
       }
     }
+  }
 
-    loadDb();
+  loadDb();
 
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  return () => {
+    cancelled = true;
+  };
+}, []);
 
   // Save whenever the data changes. PUT sends the complete shared database
   // to the server so changes made by one device are available to other devices.
