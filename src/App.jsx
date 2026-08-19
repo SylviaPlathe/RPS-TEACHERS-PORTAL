@@ -377,12 +377,15 @@ function LoginScreen({ onLogin }) {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
 
-  const submit = (e) => {
-    e.preventDefault();
-    if (!onLogin(id.trim().toUpperCase(), password)) {
-      setError("Incorrect Teacher ID or password. Please try again.");
-    }
-  };
+  const submit = async (e) => {
+  e.preventDefault();
+
+  const success = await onLogin(id.trim().toUpperCase(), password);
+
+  if (!success) {
+    setError("Incorrect Teacher ID or password. Please try again.");
+  }
+};
 
   const fillDemo = (i, p) => { setId(i); setPassword(p); setError(""); };
 
