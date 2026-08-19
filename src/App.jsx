@@ -301,13 +301,36 @@ export default function App() {
 
   // Save whenever the data changes. PUT sends the complete shared database
   // to the server so changes made by one device are available to other devices.
-  useEffect(() => {
+ 
+useEffect(() => {
   if (!dbLoaded) return;
 
-  async function saveDb() {
+  const timer = setTimeout(async () => {
     try {
-      const teachers = db.teachers.map(({ password, ...teacher }) => teacher);
-      const admins = db.admins.map(({ password, ...admin }) => admin);
+      const { data: authData, error: authError } =
+        await supabase.auth.getUser();
+
+      if (authError || !authData?.user) return;
+
+      const userId = authData.user.id;
+
+      const isAdmin = db.admins.some(
+        admin => admin.auth_user_id === userId
+      );
+
+      // Teachers should not try to write all school data.
+      // Their allowed actions will be saved separately.
+      if (!isAdmin) return;
+
+      const teachers = db.teachers.map(({ password, ...teacher }) => ({
+        ...teacher,
+        auth_user_id: teacher.auth_user_id || null,
+      }));
+
+      const admins = db.admins.map(({ password, ...admin }) => ({
+        ...admin,
+        auth_user_id: admin.auth_user_id || null,
+      }));
 
       const results = await Promise.all([
         supabase.from("teachers").upsert(teachers),
@@ -322,15 +345,16 @@ export default function App() {
       const failed = results.find(result => result.error);
 
       if (failed) {
-        throw failed.error;
+        console.error("Supabase save error:", failed.error);
       }
     } catch (e) {
       console.error("Could not save data to Supabase:", e);
     }
-  }
+  }, 1000);
 
-  saveDb();
+  return () => clearTimeout(timer);
 }, [db, dbLoaded]);
+ 
   const [session, setSession] = useState(null); // { role: 'admin'|'teacher', id }
   const [tab, setTab] = useState("dashboard");
   const [toast, setToast] = useState(null);
