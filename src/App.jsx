@@ -193,19 +193,143 @@ const SEED_VERSION = 3;
 // Reconciles any previously-saved data (which may be in an older shape) with the
 // current schema, so the app never crashes on stale data from an earlier version.
 function normalizeDb(raw) {
-  const teachers = Array.isArray(raw?.teachers) && raw.teachers.length ? raw.teachers : INITIAL_TEACHERS;
-  const savedTimetables = raw?.timetables && typeof raw.timetables === "object" ? raw.timetables : {};
-  const timetables = {};
-  teachers.forEach((t, i) => {
-    timetables[t.id] = savedTimetables[t.id] || INITIAL_TIMETABLES[t.id] || buildTimetable(t.subject, i);
+  const savedTeachers =
+    Array.isArray(raw?.teachers) && raw.teachers.length
+      ? raw.teachers
+      : INITIAL_TEACHERS;
+
+  const teachers = savedTeachers.map((t) => {
+    const original = INITIAL_TEACHERS.find((item) => item.id === t.id);
+
+    return {
+      ...t,
+      password: t.password ?? original?.password ?? "",
+    };
   });
+
+  const savedAdmins =
+    Array.isArray(raw?.admins) && raw.admins.length
+      ? raw.admins
+      : INITIAL_ADMINS;
+
+  const admins = savedAdmins.map((a) => {
+    const original = INITIAL_ADMINS.find((item) => item.id === a.id);
+
+    return {
+      ...a,
+      teacherId: a.teacherId ?? a.teacher_id ?? original?.teacherId,
+      password: a.password ?? original?.password ?? "",
+    };
+  });
+
+  const timetables = {};
+
+  teachers.forEach((teacher, i) => {
+    timetables[teacher.id] =
+      INITIAL_TIMETABLES[teacher.id] ||
+      buildTimetable(teacher.subject, i);
+  });
+
+  if (Array.isArray(raw?.timetables)) {
+    raw.timetables.forEach((row) => {
+      if (!row?.teacher_id || !row?.day) return;
+
+      if (!timetables[row.teacher_id]) {
+        timetables[row.teacher_id] = {};
+      }
+
+      if (!timetables[row.teacher_id][row.day]) {
+        timetables[row.teacher_id][row.day] = Array.from(
+          { length: 8 },
+          () => null
+        );
+      }
+
+      const periodIndex = Number(row.period) - 1;
+
+      if (periodIndex < 0 || periodIndex > 7) return;
+
+      timetables[row.teacher_id][row.day][periodIndex] = {
+        class: row.class,
+        subject: row.subject,
+        time:
+          row.start_time && row.end_time
+            ? `${String(row.start_time).slice(0, 5)} – ${String(row.end_time).slice(0, 5)}`
+            : PERIOD_TIMES[periodIndex] || "",
+      };
+    });
+  }
+
+  const substitutions = Array.isArray(raw?.substitutions)
+    ? raw.substitutions.map((s) => ({
+        ...s,
+        absentTeacherId:
+          s.absentTeacherId ?? s.absent_teacher_id,
+        replacementTeacherId:
+          s.replacementTeacherId ?? s.replacement_teacher_id,
+        isNew: s.isNew ?? false,
+      }))
+    : INITIAL_SUBSTITUTIONS;
+
+  const examDuties = Array.isArray(raw?.examDuties)
+    ? raw.examDuties.map((e) => ({
+        ...e,
+        teacherId: e.teacherId ?? e.teacher_id,
+        examName: e.examName ?? e.exam_name,
+        date: e.date ?? e.exam_date,
+        time:
+          e.time ??
+          (e.start_time && e.end_time
+            ? `${String(e.start_time).slice(0, 5)} – ${String(e.end_time).slice(0, 5)}`
+            : ""),
+        dutyType: e.dutyType ?? e.duty_type,
+      }))
+    : INITIAL_EXAM_DUTIES;
+
+  const notices = Array.isArray(raw?.notices)
+    ? raw.notices.map((n) => ({
+        ...n,
+        date: n.date ?? n.created_at,
+      }))
+    : INITIAL_NOTICES;
+
+  const repliesByQuery = {};
+
+  if (Array.isArray(raw?.queryReplies)) {
+    raw.queryReplies.forEach((reply) => {
+      if (!reply?.query_id) return;
+
+      if (!repliesByQuery[reply.query_id]) {
+        repliesByQuery[reply.query_id] = [];
+      }
+
+      repliesByQuery[reply.query_id].push({
+        from: reply.from_role,
+        text: reply.text,
+        createdAt: reply.created_at,
+      });
+    });
+  }
+
+  const queries = Array.isArray(raw?.queries)
+    ? raw.queries.map((q) => ({
+        ...q,
+        teacherId: q.teacherId ?? q.teacher_id,
+        replies:
+          Array.isArray(q.replies) && q.replies.length
+            ? q.replies
+            : repliesByQuery[q.id] || [],
+        createdAt: q.createdAt ?? q.created_at,
+      }))
+    : INITIAL_QUERIES;
+
   return {
     teachers,
-    admins: Array.isArray(raw?.admins) && raw.admins.length ? raw.admins : INITIAL_ADMINS,
-    substitutions: Array.isArray(raw?.substitutions) ? raw.substitutions : INITIAL_SUBSTITUTIONS,
-    examDuties: Array.isArray(raw?.examDuties) ? raw.examDuties : INITIAL_EXAM_DUTIES,
-    notices: Array.isArray(raw?.notices) ? raw.notices : INITIAL_NOTICES,
-    queries: Array.isArray(raw?.queries) ? raw.queries : INITIAL_QUERIES,
+    admins,
+    substitutions,
+    examDuties,
+    notices,
+    queries,
     timetables,
   };
 }
@@ -228,20 +352,21 @@ export default function App() {
   // The server stores this data in data/portal-db.json, so all devices use
   // the same database instead of having separate browser localStorage copies.
  
+ 
   useEffect(() => {
   let cancelled = false;
 
   async function loadDb() {
     try {
       const [
-        teachers,
-        admins,
-        timetables,
-        substitutions,
-        examDuties,
-        notices,
-        queries,
-        queryReplies,
+        teachersResult,
+        adminsResult,
+        timetablesResult,
+        substitutionsResult,
+        examDutiesResult,
+        noticesResult,
+        queriesResult,
+        queryRepliesResult,
       ] = await Promise.all([
         supabase.from("teachers").select("*"),
         supabase.from("admins").select("*"),
@@ -254,33 +379,35 @@ export default function App() {
       ]);
 
       const results = [
-        teachers,
-        admins,
-        timetables,
-        substitutions,
-        examDuties,
-        notices,
-        queries,
-        queryReplies,
+        teachersResult,
+        adminsResult,
+        timetablesResult,
+        substitutionsResult,
+        examDutiesResult,
+        noticesResult,
+        queriesResult,
+        queryRepliesResult,
       ];
 
-      const firstError = results.find(result => result.error);
+      const firstError = results.find((result) => result.error);
 
       if (firstError) {
         throw firstError.error;
       }
 
-      if (!cancelled) {
-        setDb({
-          teachers: teachers.data || [],
-          admins: admins.data || [],
-          timetables: timetables.data || [],
-          substitutions: substitutions.data || [],
-          examDuties: examDuties.data || [],
-          notices: notices.data || [],
-          queries: queries.data || [],
-        });
+      const raw = {
+        teachers: teachersResult.data || [],
+        admins: adminsResult.data || [],
+        timetables: timetablesResult.data || [],
+        substitutions: substitutionsResult.data || [],
+        examDuties: examDutiesResult.data || [],
+        notices: noticesResult.data || [],
+        queries: queriesResult.data || [],
+        queryReplies: queryRepliesResult.data || [],
+      };
 
+      if (!cancelled) {
+        setDb(normalizeDb(raw));
         setDbLoaded(true);
       }
     } catch (e) {
@@ -292,10 +419,42 @@ export default function App() {
     }
   }
 
-  loadDb();
+  let authSubscription;
+
+  async function startLoading() {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    if (cancelled) return;
+
+    if (session) {
+      await loadDb();
+    } else {
+      setDbLoaded(true);
+    }
+  }
+
+  const {
+    data: { subscription },
+  } = supabase.auth.onAuthStateChange((event, session) => {
+    if (cancelled) return;
+
+    if (
+      session &&
+      (event === "SIGNED_IN" || event === "INITIAL_SESSION")
+    ) {
+      loadDb();
+    }
+  });
+
+  authSubscription = subscription;
+
+  startLoading();
 
   return () => {
     cancelled = true;
+    authSubscription?.unsubscribe();
   };
 }, []);
 
