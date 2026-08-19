@@ -292,21 +292,41 @@ export default function App() {
     setTimeout(() => setToast(null), 2600);
   };
 
-  const login = (id, password) => {
-    const admin = db.admins.find(a => a.id === id && a.password === password);
-    if (admin) {
-      setSession({ role: "admin", id });
+  const login = async (id, password) => {
+  const normalizedId = id.trim().toUpperCase();
+
+  const admin = db.admins.find(a => a.id === normalizedId);
+
+  if (admin) {
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: `${normalizedId.toLowerCase()}@ramanujan-portal.local`,
+      password,
+    });
+
+    if (!error && data.user) {
+      setSession({ role: "admin", id: normalizedId });
       setTab("dashboard");
       return true;
     }
-    const t = db.teachers.find(t => t.id === id && t.password === password);
-    if (t) {
-      setSession({ role: "teacher", id });
+  }
+
+  const teacher = db.teachers.find(t => t.id === normalizedId);
+
+  if (teacher) {
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: `${normalizedId.toLowerCase()}@ramanujan-portal.local`,
+      password,
+    });
+
+    if (!error && data.user) {
+      setSession({ role: "teacher", id: normalizedId });
       setTab("dashboard");
       return true;
     }
-    return false;
-  };
+  }
+
+  return false;
+};
 
   const logout = () => { setSession(null); setTab("dashboard"); };
 
