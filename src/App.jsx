@@ -302,27 +302,35 @@ export default function App() {
   // Save whenever the data changes. PUT sends the complete shared database
   // to the server so changes made by one device are available to other devices.
   useEffect(() => {
-    if (!dbLoaded) return;
+  if (!dbLoaded) return;
 
-    const saveDb = async () => {
-      try {
-        const response = await fetch("/api/db", {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ seedVersion: SEED_VERSION, data: db }),
-        });
+  async function saveDb() {
+    try {
+      const teachers = db.teachers.map(({ password, ...teacher }) => teacher);
+      const admins = db.admins.map(({ password, ...admin }) => admin);
 
-        if (!response.ok) {
-          throw new Error(`Server returned ${response.status}`);
-        }
-      } catch (e) {
-        console.error("Could not save shared portal data:", e);
+      const results = await Promise.all([
+        supabase.from("teachers").upsert(teachers),
+        supabase.from("admins").upsert(admins),
+        supabase.from("timetables").upsert(db.timetables),
+        supabase.from("substitutions").upsert(db.substitutions),
+        supabase.from("exam_duties").upsert(db.examDuties),
+        supabase.from("notices").upsert(db.notices),
+        supabase.from("queries").upsert(db.queries),
+      ]);
+
+      const failed = results.find(result => result.error);
+
+      if (failed) {
+        throw failed.error;
       }
-    };
+    } catch (e) {
+      console.error("Could not save data to Supabase:", e);
+    }
+  }
 
-    saveDb();
-  }, [db, dbLoaded]);
-
+  saveDb();
+}, [db, dbLoaded]);
   const [session, setSession] = useState(null); // { role: 'admin'|'teacher', id }
   const [tab, setTab] = useState("dashboard");
   const [toast, setToast] = useState(null);
